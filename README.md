@@ -160,9 +160,16 @@ Detalles que importan:
   *timeout* en respuestas largas.
 - **Razonamiento adaptativo** (`thinking: adaptive`) con el resumen visible, y
   `effort` configurable.
-- **El prefijo del system prompt está cacheado**, así que los turnos siguientes
-  de una conversación son bastante más baratos. Todo lo que varía por sesión
-  (directorio, fecha) va en un bloque aparte, después del punto de caché.
+- **Dos puntos de caché.** Uno cubre el prefijo fijo —definiciones de
+  herramientas más system prompt, ~1.800 tokens—; todo lo que varía por sesión
+  (directorio, fecha) va en un bloque aparte, después de ese punto, para no
+  invalidarlo. El otro cachea el final de la conversación, que es el que de
+  verdad importa: un turno con una docena de llamadas a herramientas reenvía el
+  historial entero —y creciente— en cada una de ellas.
+  Ojo: el mínimo para que la caché se active depende del modelo (512 tokens en
+  Opus 5, 4.096 en Haiku 4.5 o en Opus 4.6). Por debajo de ese umbral no da
+  error, simplemente no cachea. `/cost` lo delata: si «tokens leídos de caché»
+  sigue a cero tras varios turnos, no está funcionando.
 - **Las entradas de las herramientas se validan** contra su esquema antes de
   ejecutarse. Hace falta porque el agente pide `eager_input_streaming`, y con
   eso la API puede entregar una entrada truncada sin lanzar ningún error.
@@ -179,5 +186,5 @@ pip install -e ".[dev]"
 python -m pytest
 ```
 
-88 tests, sin llamadas a la API: el cliente está sustituido por un doble que
+91 tests, sin llamadas a la API: el cliente está sustituido por un doble que
 reproduce los eventos del SDK.

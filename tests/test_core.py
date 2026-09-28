@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from fakes import FakeClient, RecordingUI, message, text_block, thinking_block, tool_block
 
@@ -245,6 +247,38 @@ def test_the_system_prefix_is_cached_and_stable(config):
     first, second = (call["system"] for call in agent.client.messages.calls)
     assert first[0]["cache_control"] == {"type": "ephemeral"}
     assert first[0]["text"] == second[0]["text"]
+
+
+def test_the_conversation_is_cached_too(config):
+    # Without this breakpoint only the fixed prefix caches, and the growing
+    # history is re-billed in full on every step of a multi-tool turn.
+    agent, _ = build([message([text_block("ok")])], config)
+    agent.run("hola")
+
+    assert agent.client.messages.calls[0]["cache_control"] == {"type": "ephemeral"}
+
+
+def test_volatile_session_context_sits_after_the_breakpoint(config):
+    agent, _ = build([message([text_block("ok")])], config)
+    agent.run("hola")
+
+    blocks = agent.client.messages.calls[0]["system"]
+    # The date and working directory change between sessions; keeping them out
+    # of the cached block is what stops them invalidating the prefix.
+    assert "Today's date" not in blocks[0]["text"]
+    assert "Today's date" in blocks[1]["text"]
+    assert "cache_control" not in blocks[1]
+
+
+def test_the_cached_prefix_clears_the_minimum_for_the_default_model(config):
+    # Claude Opus 5 needs a 512-token prefix before anything caches at all.
+    # Rough 4-chars-per-token estimate over the frozen tools + system blocks.
+    agent, _ = build([message([text_block("ok")])], config)
+    agent.run("hola")
+
+    call = agent.client.messages.calls[0]
+    chars = len(call["system"][0]["text"]) + len(json.dumps(call["tools"]))
+    assert chars / 4 > 512
 
 
 def test_usage_accumulates_across_steps(config, tmp_path):

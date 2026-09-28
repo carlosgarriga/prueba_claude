@@ -153,6 +153,13 @@ class Agent:
                 eager_input_streaming=self._eager,
             ),
             "output_config": {"effort": self.config.effort},
+            # Two cache breakpoints. The one inside `system` covers the frozen
+            # tools + prompt prefix (~1.8K tokens); this one auto-caches the
+            # last block of `messages`, so the conversation itself is read from
+            # cache on the next step instead of being re-billed in full. That
+            # matters far more: a turn with a dozen tool calls resends the whole
+            # (growing) history on every one of them.
+            "cache_control": {"type": "ephemeral"},
         }
         if self.config.show_thinking:
             params["thinking"] = {"type": "adaptive", "display": "summarized"}
